@@ -3,6 +3,7 @@ package dev.milinko.guitartuner.ui
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -17,13 +18,20 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.milinko.guitartuner.model.GuitarTunings
+import dev.milinko.guitartuner.ui.composables.NoteIndicatorBar
+import dev.milinko.guitartuner.ui.composables.TunerScale
+import dev.milinko.guitartuner.ui.composables.TuningSelector
 import dev.milinko.guitartuner.viewmodel.TunerViewModel
 import kotlin.math.abs
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TunerScreen(viewModel: TunerViewModel) {
     val status by viewModel.tuningStatus.collectAsState()
     val volume by viewModel.volumeFlow.collectAsState()
+    val currentTuning by viewModel.selectedTuning.collectAsState() // Uzmi trenutni štim
+    var expanded by remember { mutableStateOf(false) }
     val volumeAnim by animateFloatAsState(targetValue = if(status.frequency > 0) volume else 0f, label = "vol")
 
     Column(
@@ -31,8 +39,15 @@ fun TunerScreen(viewModel: TunerViewModel) {
             .fillMaxSize()
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        // Izbacili smo SpaceBetween da izbegnemo skakanje elemenata
+
     ) {
+
+
+        TuningSelector (
+            currentTuning = currentTuning,
+            onTuningChange = { viewModel.changeTuning(it) }
+        )
+
         // 1. Gornji info - Fiksna visina (Box sa minHeight)
         Box(
             modifier = Modifier.height(80.dp).fillMaxWidth(),
@@ -81,6 +96,14 @@ fun TunerScreen(viewModel: TunerViewModel) {
             )
         }
 
+        // --- NOVO: Vizuelni prikaz žica ---
+        NoteIndicatorBar(
+            notes = currentTuning.notes,
+            activeNote = if (status.frequency > 0) status.closestNote else null,
+            isTuned = abs(status.diffCents) < 5
+        )
+        // ----------------------------------
+
         // 3. Donji deo - Fiksiran kontejner
         Column(
             modifier = Modifier.fillMaxWidth().height(250.dp),
@@ -120,42 +143,3 @@ fun TunerScreen(viewModel: TunerViewModel) {
         }
     }
 }
-@Composable
-fun TunerScale(diffCents: Float) {
-    val animatedDiff by animateFloatAsState(
-        targetValue = diffCents,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy),
-        label = "diff"
-    )
-
-    Canvas(modifier = Modifier.fillMaxWidth().height(120.dp).padding(horizontal = 20.dp)) {
-        val center = size.width / 2
-        val rangeCents = 50f
-        val pixelsPerCent = size.width / (rangeCents * 2)
-
-        // Iscrtaj male crtice za svakih 10 centi
-        for (i in -50..50 step 10) {
-            val x = center + (i * pixelsPerCent)
-            val lineHeight = if (i == 0) 40.dp.toPx() else 20.dp.toPx()
-            val color = if (i == 0) Color.Red else Color.Gray.copy(alpha = 0.5f)
-
-            drawLine(
-                color = color,
-                start = Offset(x, size.height / 2 - lineHeight / 2),
-                end = Offset(x, size.height / 2 + lineHeight / 2),
-                strokeWidth = if (i == 0) 3.dp.toPx() else 1.dp.toPx()
-            )
-        }
-
-        // Glavna igla
-        val pointerX = center + (animatedDiff.coerceIn(-50f, 50f) * pixelsPerCent)
-        drawLine(
-            color = if (abs(diffCents) < 5) Color.Green else Color(0xFF2196F3),
-            start = Offset(pointerX, 0f),
-            end = Offset(pointerX, size.height),
-            strokeWidth = 4.dp.toPx(),
-            cap = StrokeCap.Round
-        )
-    }
-}
-
